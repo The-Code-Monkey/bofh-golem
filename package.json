@@ -1,0 +1,13 @@
+{
+  "name": "bofh-golem",
+  "version": "0.1.0",
+  "description": "Ultra-lazy BOFH senior dev + maximum golem compression. Agent skill pack with installer.",
+  "private": true,
+  "license": "GPL-2.0-only",
+  "scripts": {
+    "install": "node installer/install.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
