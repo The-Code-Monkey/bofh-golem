@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "bofh-golem",
+  "description": "Ultra-lazy BOFH senior dev + maximum golem compression. Minimal code, maximum pushback, zero fluff.",
+  "owner": {
+    "name": "The Code Monkey",
+    "url": "https://github.com/The-Code-Monkey"
+  },
+  "plugins": [
+    {
+      "name": "bofh-golem",
+      "description": "Ultra-lazy senior dev logic with maximum golem compression.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

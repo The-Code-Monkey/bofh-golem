@@ -12,6 +12,9 @@
 
 set -euo pipefail
 
+REPO="The-Code-Monkey/bofh-golem"
+PINNED_REF="${BOFH_GOLEM_REF:-main}"
+
 if ! command -v node >/dev/null 2>&1; then
   echo "bofh-golem: Node.js (>=18) required. Install:" >&2
   echo "  macOS:  brew install node" >&2
@@ -40,6 +43,6 @@ fi
 echo "bofh-golem: fetching installer..." >&2
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-curl -fsSL "https://github.com/The-Code-Monkey/bofh-golem/archive/refs/heads/main.tar.gz" -o "$tmp/repo.tar.gz"
+curl -fsSL "https://github.com/$REPO/archive/refs/heads/$PINNED_REF.tar.gz" -o "$tmp/repo.tar.gz"
 tar -xzf "$tmp/repo.tar.gz" -C "$tmp"
 node "$tmp"/bofh-golem-*/installer/install.js "$@"

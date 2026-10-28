@@ -1,0 +1,9 @@
+{
+  "name": "bofh-golem",
+  "version": "0.1.0",
+  "description": "Ultra-lazy BOFH senior dev + maximum golem compression. Minimal code, maximum pushback, zero fluff.",
+  "author": {
+    "name": "The Code Monkey",
+    "url": "https://github.com/The-Code-Monkey"
+  }
+}

@@ -11,7 +11,7 @@
 // Target dirs are the agent's skill roots:
 //   Claude Code  ~/.claude/skills
 //   OpenCode     ~/.config/opencode/skills
-//   Codex        ~/.codex/skills
+//   Codex        ~/.agents/skills (interop standard; ~/.codex/skills is legacy)
 //   Gemini CLI   ~/.gemini/skills
 
 "use strict";
@@ -35,8 +35,9 @@ const AGENTS = {
   },
   codex: {
     label: "Codex",
-    skillsRoot: path.join(HOME, ".codex", "skills"),
-    detect: () => dirExists(path.join(HOME, ".codex")),
+    skillsRoot: path.join(HOME, ".agents", "skills"),
+    detect: () =>
+      dirExists(path.join(HOME, ".codex")) || dirExists(path.join(HOME, ".agents")),
   },
   gemini: {
     label: "Gemini CLI",
@@ -90,6 +91,10 @@ function parseArgs(argv) {
       case "--list":
         flags.list = true;
         break;
+      case "--version":
+      case "-v":
+        printVersion();
+        process.exit(0);
       case "-h":
       case "--help":
         printHelp();
@@ -115,7 +120,19 @@ function printHelp() {
     "  --dry-run      report, change nothing",
     "  --uninstall    remove skills from target agents",
     "  --list         show detected agents and skill targets",
+    "  --version      print the version",
   ].join("\n"));
+}
+
+function printVersion() {
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")
+    );
+    console.log(pkg.version);
+  } catch {
+    console.log("unknown");
+  }
 }
 
 function skillNames() {

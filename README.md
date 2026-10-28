@@ -26,6 +26,17 @@ node installer/install.js
 
 Needs Node.js >= 18. Detects Claude Code, OpenCode, Codex, Gemini CLI. Copies each skill's `SKILL.md` + `README.md` into the agent's skills dir. `--dry-run` reports, changes nothing. `--uninstall` removes them.
 
+Agent skill roots:
+
+| Agent | Path |
+|-------|------|
+| Claude Code | `~/.claude/skills` |
+| OpenCode | `~/.config/opencode/skills` |
+| Codex | `~/.agents/skills` (interop standard) |
+| Gemini CLI | `~/.gemini/skills` |
+
+Codex skills are experimental: enable `[features] skills = true` in `~/.codex/config.toml`, then restart. Gemini and Codex also read the `~/.agents/skills` alias.
+
 ## Skills
 
 | Skill | Command | What it does |
@@ -47,6 +58,15 @@ Needs Node.js >= 18. Detects Claude Code, OpenCode, Codex, Gemini CLI. Copies ea
 Never cut: trust boundary validation, data-loss error handling, security, accessibility, hardware calibration.
 
 Stop it with `stop golem` or `normal mode`.
+
+## Claude Code plugin
+
+```
+claude plugin marketplace add The-Code-Monkey/bofh-golem
+claude plugin install bofh-golem@bofh-golem
+```
+
+The plugin manifest is for discoverability; skills land in `~/.claude/skills` via the installer.
 
 ## Installer
 
