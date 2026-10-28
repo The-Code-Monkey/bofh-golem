@@ -8,9 +8,11 @@
 //   node installer/install.js --uninstall  remove skills from detected agents
 //
 // Skill dirs live next to this file: <repo>/skills/<name>/{SKILL.md,README.md}.
+// Slash-command files live in <repo>/commands/<name>.md and are copied to the
+// agent's command root so /bofh-golem autocompletes.
 // Target dirs are the agent's skill roots:
-//   Claude Code  ~/.claude/skills
-//   OpenCode     ~/.config/opencode/skills
+//   Claude Code  ~/.claude/skills        commands ~/.claude/commands
+//   OpenCode     ~/.config/opencode/skills commands ~/.config/opencode/commands
 //   Codex        ~/.agents/skills (interop standard; ~/.codex/skills is legacy)
 //   Gemini CLI   ~/.gemini/skills
 
@@ -26,11 +28,13 @@ const AGENTS = {
   claude: {
     label: "Claude Code",
     skillsRoot: path.join(HOME, ".claude", "skills"),
+    commandsRoot: path.join(HOME, ".claude", "commands"),
     detect: () => dirExists(path.join(HOME, ".claude")),
   },
   opencode: {
     label: "OpenCode",
     skillsRoot: path.join(HOME, ".config", "opencode", "skills"),
+    commandsRoot: path.join(HOME, ".config", "opencode", "commands"),
     detect: () => dirExists(path.join(HOME, ".config", "opencode")),
   },
   codex: {
@@ -47,6 +51,7 @@ const AGENTS = {
 };
 
 const SKILLS_DIR = path.join(__dirname, "..", "skills");
+const COMMANDS_DIR = path.join(__dirname, "..", "commands");
 
 function dirExists(p) {
   try {
@@ -148,6 +153,18 @@ function skillNames() {
   }
 }
 
+function commandNames() {
+  try {
+    return fs
+      .readdirSync(COMMANDS_DIR, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith(".md"))
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 function targetsFor(flags) {
   if (flags.all) {
     return Object.keys(AGENTS);
@@ -185,7 +202,8 @@ function main() {
     for (const key of Object.keys(AGENTS)) {
       const a = AGENTS[key];
       const detected = a.detect() ? "yes" : "no";
-      console.log(`${a.label}: detected=${detected}, skills=${a.skillsRoot}`);
+      const cmds = a.commandsRoot ? `, commands=${a.commandsRoot}` : "";
+      console.log(`${a.label}: detected=${detected}, skills=${a.skillsRoot}${cmds}`);
     }
     console.log(`\nSkills to ship (${names.length}): ${names.join(", ")}`);
     return;
@@ -209,6 +227,23 @@ function main() {
       } else {
         console.log(`${flags.dryRun ? "[dry-run] " : ""}${verb} ${name} to ${a.label}`);
         if (!flags.dryRun) copyDir(src, dst);
+      }
+    }
+    if (a.commandsRoot) {
+      const cmds = commandNames();
+      for (const name of cmds) {
+        const src = path.join(COMMANDS_DIR, name);
+        const dst = path.join(a.commandsRoot, name);
+        if (flags.uninstall) {
+          console.log(`${flags.dryRun ? "[dry-run] " : ""}${verb} ${name} from ${a.label}`);
+          if (!flags.dryRun && fs.existsSync(dst)) fs.unlinkSync(dst);
+        } else {
+          console.log(`${flags.dryRun ? "[dry-run] " : ""}${verb} ${name} to ${a.label}`);
+          if (!flags.dryRun) {
+            fs.mkdirSync(a.commandsRoot, { recursive: true });
+            fs.copyFileSync(src, dst);
+          }
+        }
       }
     }
   }

@@ -32,6 +32,10 @@ for s in $expected; do
     echo "FAIL: skills/$s/SKILL.md missing" >&2
     fail=1
   fi
+  if [ ! -f "commands/$s.md" ]; then
+    echo "FAIL: commands/$s.md missing" >&2
+    fail=1
+  fi
 done
 
 if [ "$fail" -ne 0 ]; then
