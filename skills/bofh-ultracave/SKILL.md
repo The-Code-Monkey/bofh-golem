@@ -31,7 +31,7 @@ Bug fix: grep callers, fix root cause in shared code.
 
 Code style: shortest readable diff. Comment only non-obvious why. Mark limits: `shortcut: <limit>, <upgrade>`.
 
-Explanations: every non-obvious "why" goes strictly as an inline code comment. Zero prose outside the code block.
+Explanations: every non-obvious "why" goes strictly as an inline code comment. Zero prose outside the code block for explanations.
 
 Non-trivial logic gets 1-line test/assert. Fix all broken callers/tests/fixtures.
 

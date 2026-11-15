@@ -24,7 +24,7 @@ bash install.sh
 node installer/install.js
 ```
 
-Needs Node.js >= 18. Detects Claude Code, OpenCode, Codex, Gemini CLI. Copies each skill's `SKILL.md` + `README.md` into the agent's skills dir. `--dry-run` reports, changes nothing. `--uninstall` removes them.
+Needs Node.js >= 18. Detects Claude Code, OpenCode, Codex, Gemini CLI. Copies each skill's `SKILL.md` + `README.md` into the agent's skills dir and the matching slash command into the agent's command dir. A versioned manifest records what the installer owns, so `--uninstall` removes exactly those artifacts and leaves edited ones alone unless you pass `--force`. `--dry-run` prints the same plan without writing.
 
 Agent skill roots:
 
@@ -71,10 +71,24 @@ The plugin manifest is for discoverability; skills land in `~/.claude/skills` vi
 ## Installer
 
 ```
-node installer/install.js --list        # show detected agents
-node installer/install.js --dry-run     # report, change nothing
+node installer/install.js --list        # show agent skill and command destinations
+node installer/install.js --dry-run     # print the plan, change nothing
 node installer/install.js --opencode    # one agent only
-node installer/install.js --uninstall   # remove skills
+node installer/install.js --all         # every registered agent
+node installer/install.js --uninstall   # remove recorded artifacts
+node installer/install.js --uninstall --force  # also remove edited artifacts
+```
+
+Each agent gets `.bofh-golem-manifest.json` in its skills root. A missing manifest falls back to repository names with a warning.
+
+## Development
+
+Slash commands are generated from the canonical rules in `prompts/`. Edit `prompts/`, then regenerate:
+
+```
+npm run generate
+npm test
+bash scripts/smoke.sh
 ```
 
 ## License

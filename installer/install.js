@@ -1,132 +1,77 @@
 #!/usr/bin/env node
-// bofh-golem installer. Zero dependencies. Detects agents, copies skills.
+// bofh-golem installer. Zero dependencies. Parses, plans, applies.
 //
 //   node installer/install.js            install to all detected agents
 //   node installer/install.js --claude   install to Claude Code only
-//   node installer/install.js --list     show what would be detected
-//   node installer/install.js --dry-run  report, change nothing
-//   node installer/install.js --uninstall  remove skills from detected agents
+//   node installer/install.js --list     show agent destinations
+//   node installer/install.js --dry-run  print the plan, change nothing
+//   node installer/install.js --uninstall  remove installed artifacts
 //
-// Skill dirs live next to this file: <repo>/skills/<name>/{SKILL.md,README.md}.
-// Slash-command files live in <repo>/commands/<name>.md and are copied to the
-// agent's command root so /bofh-golem autocompletes.
-// Target dirs are the agent's skill roots:
-//   Claude Code  ~/.claude/skills        commands ~/.claude/commands
-//   OpenCode     ~/.config/opencode/skills commands ~/.config/opencode/commands
-//   Codex        ~/.agents/skills (interop standard; ~/.codex/skills is legacy)
-//   Gemini CLI   ~/.gemini/skills
+// Planning is pure: it reads the parsed request, agent registry, artifact
+// catalog, and install state, then returns ordered operations. The apply
+// adapter is the only code that writes files, prints results, or exits.
 
 "use strict";
 
 const fs = require("fs");
-const path = require("path");
 const os = require("os");
+const path = require("path");
 
-const HOME = os.homedir();
+const { createRegistry, agentList, detectAgents } = require("./agents");
+const { parseArgs, usage } = require("./args");
+const { loadCatalog } = require("./catalog");
+const { createPlan, selectTargets } = require("./plan");
+const { applyOperations } = require("./apply");
+const { readManifest, digestDestination, manifestPath } = require("./manifest");
+const {
+  readBootstrap,
+  checkNodeFloor,
+  defaultBootstrapPath,
+} = require("./bootstrap");
 
-const AGENTS = {
-  claude: {
-    label: "Claude Code",
-    skillsRoot: path.join(HOME, ".claude", "skills"),
-    commandsRoot: path.join(HOME, ".claude", "commands"),
-    detect: () => dirExists(path.join(HOME, ".claude")),
-  },
-  opencode: {
-    label: "OpenCode",
-    skillsRoot: path.join(HOME, ".config", "opencode", "skills"),
-    commandsRoot: path.join(HOME, ".config", "opencode", "commands"),
-    detect: () => dirExists(path.join(HOME, ".config", "opencode")),
-  },
-  codex: {
-    label: "Codex",
-    skillsRoot: path.join(HOME, ".agents", "skills"),
-    detect: () =>
-      dirExists(path.join(HOME, ".codex")) || dirExists(path.join(HOME, ".agents")),
-  },
-  gemini: {
-    label: "Gemini CLI",
-    skillsRoot: path.join(HOME, ".gemini", "skills"),
-    detect: () => dirExists(path.join(HOME, ".gemini")),
-  },
-};
-
-const SKILLS_DIR = path.join(__dirname, "..", "skills");
-const COMMANDS_DIR = path.join(__dirname, "..", "commands");
-
-function dirExists(p) {
+function listDirectoryNames(dir) {
   try {
-    return fs.statSync(p).isDirectory();
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
   } catch {
-    return false;
+    return [];
   }
 }
 
-function parseArgs(argv) {
-  const flags = {
-    all: false,
-    agents: new Set(),
-    dryRun: false,
-    uninstall: false,
-    list: false,
+function listFileNames(dir) {
+  if (!dir) return [];
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function readAgentState(agent) {
+  const read = readManifest(agent);
+  if (!read.ok) return { ok: false, error: read.error };
+  const state = {
+    manifest: read.manifest,
+    presentSkills: listDirectoryNames(agent.skillsRoot),
+    presentCommands: listFileNames(agent.commandsRoot),
+    currentDigests: {},
   };
-  for (const a of argv) {
-    switch (a) {
-      case "--all":
-        flags.all = true;
-        break;
-      case "--claude":
-        flags.agents.add("claude");
-        break;
-      case "--opencode":
-        flags.agents.add("opencode");
-        break;
-      case "--codex":
-        flags.agents.add("codex");
-        break;
-      case "--gemini":
-        flags.agents.add("gemini");
-        break;
-      case "--dry-run":
-        flags.dryRun = true;
-        break;
-      case "--uninstall":
-      case "-u":
-        flags.uninstall = true;
-        break;
-      case "--list":
-        flags.list = true;
-        break;
-      case "--version":
-      case "-v":
-        printVersion();
-        process.exit(0);
-      case "-h":
-      case "--help":
-        printHelp();
-        process.exit(0);
-      default:
-        break;
+  if (read.manifest) {
+    for (const artifact of read.manifest.artifacts) {
+      state.currentDigests[`${artifact.type}:${artifact.name}`] = digestDestination(
+        artifact.type,
+        artifact.destination
+      );
     }
   }
-  return flags;
-}
-
-function printHelp() {
-  console.log([
-    "bofh-golem installer",
-    "",
-    "Usage: node installer/install.js [flags]",
-    "",
-    "  --all          install to every detected agent",
-    "  --claude       Claude Code only",
-    "  --opencode     OpenCode only",
-    "  --codex        Codex only",
-    "  --gemini       Gemini CLI only",
-    "  --dry-run      report, change nothing",
-    "  --uninstall    remove skills from target agents",
-    "  --list         show detected agents and skill targets",
-    "  --version      print the version",
-  ].join("\n"));
+  return { ok: true, state };
 }
 
 function printVersion() {
@@ -140,116 +85,122 @@ function printVersion() {
   }
 }
 
-function skillNames() {
-  try {
-    return fs
-      .readdirSync(SKILLS_DIR, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name)
-      .sort();
-  } catch {
-    console.error(`bofh-golem: skills dir not found: ${SKILLS_DIR}`);
-    process.exit(1);
+function runList(registry) {
+  const detection = detectAgents(registry);
+  for (const agent of agentList(registry)) {
+    const detected = detection[agent.key] ? "yes" : "no";
+    const commands = agent.commandsRoot ? agent.commandsRoot : "(none)";
+    console.log(
+      `${agent.label}: detected=${detected}, skills=${agent.skillsRoot}, commands=${commands}`
+    );
   }
+  const catalog = loadCatalog({
+    skillsDir: path.join(__dirname, "..", "skills"),
+    commandsDir: path.join(__dirname, "..", "commands"),
+  });
+  if (catalog.ok) {
+    console.log(
+      `\nSkills to ship (${catalog.skills.length}): ${catalog.skills
+        .map((skill) => skill.name)
+        .join(", ")}`
+    );
+  } else {
+    console.error(`bofh-golem: ${catalog.error}`);
+  }
+  return 0;
 }
 
-function commandNames() {
-  try {
-    return fs
-      .readdirSync(COMMANDS_DIR, { withFileTypes: true })
-      .filter((e) => e.isFile() && e.name.endsWith(".md"))
-      .map((e) => e.name)
-      .sort();
-  } catch {
-    return [];
+function run(argv) {
+  const bootstrap = readBootstrap(defaultBootstrapPath());
+  if (!bootstrap.ok) {
+    console.error(`bofh-golem: ${bootstrap.error}`);
+    return 1;
   }
-}
-
-function targetsFor(flags) {
-  if (flags.all) {
-    return Object.keys(AGENTS);
-  }
-  if (flags.agents.size > 0) {
-    return [...flags.agents];
-  }
-  // Default: only agents actually installed on this machine.
-  return Object.keys(AGENTS).filter((k) => AGENTS[k].detect());
-}
-
-function copyDir(src, dst) {
-  fs.mkdirSync(dst, { recursive: true });
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const s = path.join(src, entry.name);
-    const d = path.join(dst, entry.name);
-    if (entry.isDirectory()) {
-      copyDir(s, d);
-    } else {
-      fs.copyFileSync(s, d);
-    }
-  }
-}
-
-function rmDir(p) {
-  if (!dirExists(p)) return;
-  fs.rmSync(p, { recursive: true, force: true });
-}
-
-function main() {
-  const flags = parseArgs(process.argv.slice(2));
-  const names = skillNames();
-
-  if (flags.list) {
-    for (const key of Object.keys(AGENTS)) {
-      const a = AGENTS[key];
-      const detected = a.detect() ? "yes" : "no";
-      const cmds = a.commandsRoot ? `, commands=${a.commandsRoot}` : "";
-      console.log(`${a.label}: detected=${detected}, skills=${a.skillsRoot}${cmds}`);
-    }
-    console.log(`\nSkills to ship (${names.length}): ${names.join(", ")}`);
-    return;
+  const floor = checkNodeFloor(process.versions.node, bootstrap.data.node);
+  if (!floor.ok) {
+    console.error(`bofh-golem: ${floor.error}`);
+    return 1;
   }
 
-  const targets = targetsFor(flags);
-  if (targets.length === 0) {
-    console.log("bofh-golem: no agent detected. Pass --claude, --opencode, --codex, or --gemini.");
-    process.exit(1);
+  const registry = createRegistry(os.homedir(), fs);
+  const parsed = parseArgs(argv, registry);
+  if (!parsed.ok) {
+    console.error(`bofh-golem: ${parsed.error}`);
+    console.error("Run --help for usage.");
+    return 1;
+  }
+  const request = parsed.request;
+
+  if (request.mode === "help") {
+    console.log(usage(registry));
+    return 0;
+  }
+  if (request.mode === "version") {
+    printVersion();
+    return 0;
+  }
+  if (request.mode === "list") {
+    return runList(registry);
   }
 
-  const verb = flags.uninstall ? "Removing" : "Installing";
+  const catalog = loadCatalog({
+    skillsDir: path.join(__dirname, "..", "skills"),
+    commandsDir: path.join(__dirname, "..", "commands"),
+  });
+  if (!catalog.ok) {
+    console.error(`bofh-golem: ${catalog.error}`);
+    return 1;
+  }
+
+  const detection = detectAgents(registry);
+  const targets = selectTargets(request, registry, detection);
+  const state = {};
   for (const key of targets) {
-    const a = AGENTS[key];
-    for (const name of names) {
-      const src = path.join(SKILLS_DIR, name);
-      const dst = path.join(a.skillsRoot, name);
-      if (flags.uninstall) {
-        console.log(`${flags.dryRun ? "[dry-run] " : ""}${verb} ${name} from ${a.label}`);
-        if (!flags.dryRun) rmDir(dst);
-      } else {
-        console.log(`${flags.dryRun ? "[dry-run] " : ""}${verb} ${name} to ${a.label}`);
-        if (!flags.dryRun) copyDir(src, dst);
-      }
+    const result = readAgentState(registry[key]);
+    if (!result.ok) {
+      console.error(`bofh-golem: ${result.error}`);
+      return 1;
     }
-    if (a.commandsRoot) {
-      const cmds = commandNames();
-      for (const name of cmds) {
-        const src = path.join(COMMANDS_DIR, name);
-        const dst = path.join(a.commandsRoot, name);
-        if (flags.uninstall) {
-          console.log(`${flags.dryRun ? "[dry-run] " : ""}${verb} ${name} from ${a.label}`);
-          if (!flags.dryRun && fs.existsSync(dst)) fs.unlinkSync(dst);
-        } else {
-          console.log(`${flags.dryRun ? "[dry-run] " : ""}${verb} ${name} to ${a.label}`);
-          if (!flags.dryRun) {
-            fs.mkdirSync(a.commandsRoot, { recursive: true });
-            fs.copyFileSync(src, dst);
-          }
-        }
-      }
-    }
+    state[key] = result.state;
   }
-  if (!flags.dryRun) {
-    console.log(`\nDone. ${verb === "Installing" ? "Say /bofh-golem" : "Removed"} ${names.length} skills x ${targets.length} agent(s).`);
+
+  const manifestPaths = {};
+  for (const key of targets) manifestPaths[key] = manifestPath(registry[key]);
+
+  const plan = createPlan({
+    request,
+    registry,
+    catalog,
+    detection,
+    state,
+    manifestPaths,
+  });
+  for (const warning of plan.warnings || []) {
+    console.error(`bofh-golem: ${warning}`);
   }
+  if (!plan.ok) {
+    console.error(`bofh-golem: ${plan.error}`);
+    return 1;
+  }
+
+  const result = applyOperations(plan.operations, {
+    registry,
+    dryRun: request.dryRun,
+  });
+  if (!result.ok) {
+    console.error(`bofh-golem: apply failed: ${result.error}`);
+    return 1;
+  }
+
+  if (!request.dryRun) {
+    const verb = request.mode === "uninstall" ? "Removed" : "Installed";
+    console.log(`\nDone. ${verb} artifacts for ${plan.targets.length} agent(s).`);
+  }
+  return 0;
 }
 
-main();
+if (require.main === module) {
+  process.exitCode = run(process.argv.slice(2));
+}
+
+module.exports = { run, readAgentState, listDirectoryNames, listFileNames };

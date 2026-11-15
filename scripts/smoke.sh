@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bofh-golem smoke test. Run before committing installer changes.
+# bofh-golem smoke test. Run before committing.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -7,8 +7,19 @@ cd "$(dirname "$0")/.."
 fail=0
 
 echo "== syntax =="
-node --check installer/install.js || fail=1
+for file in installer/*.js scripts/*.js test/*.js; do
+  node --check "$file" || fail=1
+done
 bash -n install.sh || fail=1
+
+echo "== prompt drift =="
+node scripts/generate-commands.js --check || fail=1
+
+echo "== docs drift =="
+node scripts/check-docs.js || fail=1
+
+echo "== tests =="
+node --test test/*.test.js || fail=1
 
 echo "== placeholder check =="
 if grep -Rq "<owner>" install.sh install.ps1 README.md; then

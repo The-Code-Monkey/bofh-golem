@@ -2,41 +2,106 @@
 #
 # One-line install:
 #   irm https://raw.githubusercontent.com/The-Code-Monkey/bofh-golem/main/install.ps1 | iex
+#
+# Canonical facts (repo, ref, Node floor) live in bootstrap.json. The shim
+# checks the Node floor before downloading the installer archive, forwards
+# every flag, and never selects, copies, or removes artifacts.
 
 $ErrorActionPreference = "Stop"
 
-$Repo = "The-Code-Monkey/bofh-golem"
-$PinnedRef = if ($env:BOFH_GOLEM_REF) { $env:BOFH_GOLEM_REF } else { "main" }
+$NodeBin = if ($env:BOFH_GOLEM_NODE) { $env:BOFH_GOLEM_NODE } else { "node" }
+$LocatorRepo = "The-Code-Monkey/bofh-golem"
+$LocatorRef = "main"
+$Repo = if ($env:BOFH_GOLEM_REPO) { $env:BOFH_GOLEM_REPO } else { $LocatorRepo }
+$Ref = if ($env:BOFH_GOLEM_REF) { $env:BOFH_GOLEM_REF } else { $LocatorRef }
 
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Error "bofh-golem: Node.js (>=18) required. Install from https://nodejs.org"
+function Fail([string]$Message) {
+    Write-Error "bofh-golem: $Message"
     exit 1
 }
 
-$nodeMajor = node -p "process.versions.node.split('.')[0]"
-if ([int]$nodeMajor -lt 18) {
-    Write-Error "bofh-golem: Node $nodeMajor too old. Need Node >=18."
-    exit 1
+if (-not (Get-Command $NodeBin -ErrorAction SilentlyContinue)) {
+    Fail "Node.js required. Install Node >=18 from https://nodejs.org"
 }
 
-$here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$installer = Join-Path $here "installer/install.js"
+$here = if ($PSScriptRoot) { $PSScriptRoot } else { "" }
+$bootstrap = if ($here -and (Test-Path (Join-Path $here "bootstrap.json"))) {
+    Join-Path $here "bootstrap.json"
+} else {
+    $null
+}
+$tmp = $null
 
-if (Test-Path $installer) {
-    node $installer @args
-    exit $LASTEXITCODE
+if (-not $bootstrap) {
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("bofh-golem-" + [System.Guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $tmp | Out-Null
+    $bootstrap = Join-Path $tmp "bootstrap.json"
+    $url = if ($env:BOFH_GOLEM_BOOTSTRAP_URL) {
+        $env:BOFH_GOLEM_BOOTSTRAP_URL
+    } else {
+        "https://raw.githubusercontent.com/$Repo/$Ref/bootstrap.json"
+    }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $bootstrap
+    } catch {
+        Fail "cannot fetch bootstrap metadata: $url"
+    }
 }
 
-# Curl-pipe path: download the tarball and run the installer from it.
-Write-Host "bofh-golem: fetching installer..."
-$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("bofh-golem-" + [System.Guid]::NewGuid().ToString("N"))
-New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
-    $tar = Join-Path $tmp "repo.tar.gz"
-    Invoke-WebRequest -Uri "https://github.com/$Repo/archive/refs/heads/$PinnedRef.tar.gz" -OutFile $tar
-    tar -xzf $tar -C $tmp
-    $dir = Get-ChildItem -Path $tmp -Directory | Select-Object -First 1
-    node (Join-Path $dir.FullName "installer/install.js") @args
+    $meta = Get-Content -Raw -Path $bootstrap | ConvertFrom-Json
+    $Repo = $meta.repo
+    $Ref = $meta.ref
+    $floor = [int]$meta.node
+
+    $major = [int](& $NodeBin -p "process.versions.node.split('.')[0]")
+    if ($major -lt $floor) {
+        Fail "Node $major too old. Need Node >=$floor."
+    }
+
+    $localInstaller = if ($here) { Join-Path $here "installer/install.js" } else { $null }
+    if (-not $env:BOFH_GOLEM_FORCE_REMOTE -and $localInstaller -and (Test-Path $localInstaller)) {
+        & $NodeBin $localInstaller @args
+        exit $LASTEXITCODE
+    }
+
+    if (-not $tmp) {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("bofh-golem-" + [System.Guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $tmp | Out-Null
+    }
+
+    $archive = $env:BOFH_GOLEM_ARCHIVE
+    if (-not $archive) {
+        $archive = Join-Path $tmp "repo.tar.gz"
+        $url = if ($env:BOFH_GOLEM_ARCHIVE_URL) {
+            $env:BOFH_GOLEM_ARCHIVE_URL
+        } else {
+            "https://github.com/$Repo/archive/refs/heads/$Ref.tar.gz"
+        }
+        Write-Host "bofh-golem: fetching installer..."
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $archive
+        } catch {
+            Fail "cannot download installer: $url"
+        }
+    }
+
+    tar -xzf $archive -C $tmp
+    if ($LASTEXITCODE -ne 0) {
+        Fail "cannot extract installer archive: $archive"
+    }
+
+    $installer = Get-ChildItem -Path $tmp -Recurse -Filter "install.js" |
+        Where-Object { $_.FullName -match '[\\/]installer[\\/]install\.js$' } |
+        Select-Object -First 1
+    if (-not $installer) {
+        Fail "installer not found in archive: $archive"
+    }
+
+    & $NodeBin $installer.FullName @args
+    exit $LASTEXITCODE
 } finally {
-    Remove-Item -Recurse -Force $tmp
+    if ($tmp -and (Test-Path $tmp)) {
+        Remove-Item -Recurse -Force $tmp
+    }
 }

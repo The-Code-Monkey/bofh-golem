@@ -5,7 +5,11 @@
   "private": true,
   "license": "GPL-2.0-only",
   "scripts": {
-    "install": "node installer/install.js"
+    "install": "node installer/install.js",
+    "test": "node --test test/*.test.js",
+    "generate": "node scripts/generate-commands.js",
+    "check:prompts": "node scripts/generate-commands.js --check",
+    "check:docs": "node scripts/check-docs.js"
   },
   "engines": {
     "node": ">=18"
