@@ -54,10 +54,13 @@ function Invoke-Shim {
         $saved[$key] = [System.Environment]::GetEnvironmentVariable($key, "Process")
         [System.Environment]::SetEnvironmentVariable($key, $Environment[$key], "Process")
     }
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     try {
         $output = & $PowerShellBin -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Work "install.ps1") @ShimArgs 2>&1
         $code = $LASTEXITCODE
     } finally {
+        $ErrorActionPreference = $previousErrorAction
         foreach ($key in $saved.Keys) {
             [System.Environment]::SetEnvironmentVariable($key, $saved[$key], "Process")
         }
