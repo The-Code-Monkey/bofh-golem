@@ -6,12 +6,25 @@ on:
   pull_request:
 
 jobs:
-  smoke:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 26]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Smoke test
+        run: bash scripts/smoke.sh
+
+  windows-shims:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - name: Smoke test
-        run: bash scripts/smoke.sh
+      - name: PowerShell shim tests
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-ps1.ps1

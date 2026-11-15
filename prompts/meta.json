@@ -1,0 +1,74 @@
+{
+  "skills": [
+    {
+      "skill": "bofh-golem",
+      "command": "bofh-golem",
+      "title": "bofh-golem",
+      "description": "Ultra-lazy BOFH senior dev + maximum golem compression. Pushes back on\nbloat, writes minimal complete code, responds in dense fragments. Use for\nany coding task, simplest solution, YAGNI, or when user says \"be lazy\",\n\"golem\", \"ponytail\", or complains about over-engineering.",
+      "commandDescription": "Activate bofh-golem mode (off | status | ultra | wenyan)",
+      "commandIntro": "Activate bofh-golem mode: $ARGUMENTS",
+      "disableModelInvocation": false,
+      "body": ["modes/golem/intro.md", "shared/phases.md", "modes/golem/output.md"]
+    },
+    {
+      "skill": "bofh-ultracave",
+      "command": "bofh-ultracave",
+      "title": "bofh-ultracave",
+      "description": "bofh-golem at maximum compression: fragments, one word when one word is\nenough, each fact once. Invoke only with /bofh-ultracave or /bofh-golem\nultra. Stays on until \"stop golem\" or \"normal mode\".",
+      "commandDescription": "Activate bofh-ultracave mode (bofh-golem at maximum compression)",
+      "commandIntro": "Activate bofh-ultracave mode.",
+      "disableModelInvocation": true,
+      "body": ["modes/ultracave/intro.md", "shared/phases.md", "modes/ultracave/output.md"]
+    },
+    {
+      "skill": "bofh-megacave",
+      "command": "bofh-megacave",
+      "title": "bofh-megacave",
+      "description": "bofh-golem in Classical Chinese (文言文): far fewer characters, technical\nterms verbatim. Invoke only with /bofh-megacave or /bofh-golem wenyan.\nStays on until \"stop golem\" or \"normal mode\".",
+      "commandDescription": "Activate bofh-megacave mode (bofh-golem in Classical Chinese)",
+      "commandIntro": "Activate bofh-megacave mode.",
+      "disableModelInvocation": true,
+      "body": ["modes/megacave/intro.md", "shared/phases.md", "modes/megacave/output.md"]
+    },
+    {
+      "skill": "bofh-golem-commit",
+      "command": "bofh-golem-commit",
+      "title": null,
+      "description": "Write a Conventional Commits message compressed to intent only. Use for\n\"write a commit\", \"commit message\", /commit or /bofh-golem-commit.",
+      "commandDescription": "Generate a terse bofh-golem commit message for staged changes",
+      "commandIntro": "Generate a commit message for the current staged changes.",
+      "disableModelInvocation": false,
+      "body": ["commit.md"]
+    },
+    {
+      "skill": "bofh-golem-review",
+      "command": "bofh-golem-review",
+      "title": null,
+      "description": "Compressed code review - one line per finding. Target abstractions,\nrecommend deletion, give a 1-line fix. Use for /bofh-golem-review, \"review\nthis PR\", or \"review the diff\".",
+      "commandDescription": "Compressed code review, one line per finding",
+      "commandIntro": "Review the diff. One line per finding. Location, problem, fix. Target abstractions, recommend deletion, give a 1-line fix.",
+      "disableModelInvocation": false,
+      "body": ["review.md"]
+    },
+    {
+      "skill": "bofh-golem-compress",
+      "command": "bofh-golem-compress",
+      "title": "bofh-golem-compress",
+      "description": "Compress a memory file such as CLAUDE.md or a todo list into golem format to\nsave input tokens, keeping a readable backup. Trigger: /bofh-golem-compress.",
+      "commandDescription": "Compress a memory file into golem format, keeping a backup",
+      "commandIntro": "Compress a memory file into golem format: $ARGUMENTS",
+      "disableModelInvocation": false,
+      "body": ["compress.md"]
+    },
+    {
+      "skill": "bofh-golem-stats",
+      "command": "bofh-golem-stats",
+      "title": null,
+      "description": "Locate the host's native usage report for the current session. Never infer\nsavings without a measured baseline. Trigger: /bofh-golem-stats.",
+      "commandDescription": "Locate the host's native token usage report",
+      "commandIntro": "Locate the host's native usage report for the current session. Never infer savings without a measured baseline. Report only what the host measured.",
+      "disableModelInvocation": false,
+      "body": ["stats.md"]
+    }
+  ]
+}
